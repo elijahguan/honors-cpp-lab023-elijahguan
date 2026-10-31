@@ -125,21 +125,23 @@ AVLTree<Key, Value, Compare>::rebalance(Node* n) {
 
 template <typename Key, typename Value, typename Compare>
 typename AVLTree<Key, Value, Compare>::Node*
-AVLTree<Key, Value, Compare>::insert(Node* n, const Key& key,
-                                     const Value& value, bool& inserted) {
-    // TODO: standard BST insertion followed by AVL rebalancing.
+AVLTree<Key, Value, Compare>::insert(
+    Node* n, const Key& key, const Value& value, bool& inserted
+) {
     if (!n) {
-        n = new Node(key, value);
         inserted = true;
-        return n;
+        return new Node(key, value);
     }
-    if (comp_(key, n->key) < 0) {
+
+    if (comp_(key, n->key)) {
         n->left = insert(n->left, key, value, inserted);
-    } else if (comp_(key, n->key) > 0) {
+    } else if (comp_(n->key, key)) {
         n->right = insert(n->right, key, value, inserted);
     } else {
+        n->value = value;
         return n;
     }
+
     return rebalance(n);
 }
 
@@ -164,28 +166,32 @@ AVLTree<Key, Value, Compare>::minimum(Node* n) {
 
 template <typename Key, typename Value, typename Compare>
 typename AVLTree<Key, Value, Compare>::Node*
-AVLTree<Key, Value, Compare>::erase(Node* n, const Key& key, bool& removed) {
-    // TODO: standard BST deletion followed by AVL rebalancing.
-    if (!n) {
-        return nullptr;
-    }
-    if (comp_(key, n->key) < 0) {
+AVLTree<Key, Value, Compare>::erase(
+    Node* n, const Key& key, bool& removed
+) {
+    if (!n) return nullptr;
+
+    if (comp_(key, n->key)) {
         n->left = erase(n->left, key, removed);
-    } else if (comp_(key, n->key) > 0) {
+    } else if (comp_(n->key, key)) {
         n->right = erase(n->right, key, removed);
     } else {
-        if (n->left && n->right) {
-            Node* successor = minimum(n->right);
-            n->key = successor->key;
-            n->value = successor->value;
-            n->right = erase(n->right, successor->key, removed);
-        } else {
-            Node* temp = n->left ? n->left : n->right;
+        removed = true;
+
+        if (!n->left || !n->right) {
+            Node* child = n->left ? n->left : n->right;
             delete n;
-            n = temp;
-            removed = true;
+            return child;
         }
+
+        Node* successor = minimum(n->right);
+        n->key = successor->key;
+        n->value = successor->value;
+
+        bool successorRemoved = false;
+        n->right = erase(n->right, successor->key, successorRemoved);
     }
+
     return rebalance(n);
 }
 
@@ -202,11 +208,10 @@ bool AVLTree<Key, Value, Compare>::erase(const Key& key) {
 template <typename Key, typename Value, typename Compare>
 const typename AVLTree<Key, Value, Compare>::Node*
 AVLTree<Key, Value, Compare>::findNode(const Node* n, const Key& key) const {
-    // TODO: perform ordered search.
     while (n) {
-        if (comp_(key, n->key) < 0) {
+        if (comp_(key, n->key)) {
             n = n->left;
-        } else if (comp_(key, n->key) > 0) {
+        } else if (comp_(n->key, key)) {
             n = n->right;
         } else {
             return n;
