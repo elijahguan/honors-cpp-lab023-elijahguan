@@ -10,6 +10,11 @@ SkipList<Key, Value>::SkipList(std::size_t maxLevel, double probability, unsigne
     : head_(nullptr), size_(0), maxLevel_(maxLevel), probability_(probability),
       generator_(seed), distribution_(0.0, 1.0) {
     // TODO: Validate arguments and create the sentinel head node.
+    if (probability_ <= 0.0 || probability_ >= 1.0) {
+        throw std::invalid_argument("probability must be between 0 and 1");
+    }
+
+    head_ = new Node(Key{}, Value{}, maxLevel_);
 }
 
 template <typename Key, typename Value>
@@ -44,25 +49,93 @@ template <typename Key, typename Value>
 std::size_t SkipList<Key, Value>::randomLevel() {
     // TODO: Start at level 0 and promote while distribution_() < probability_,
     // stopping at maxLevel_.
-    return 0;
+    std::size_t level = 0;
+
+    while (level < maxLevel_ && distribution_(generator_) < probability_) {
+        ++level;
+    }
+
+    return level;
 }
 
 template <typename Key, typename Value>
 void SkipList<Key, Value>::clear() {
     // TODO: Delete every data node, then delete the sentinel.
+    Node* current = head_->forward[0];
+    while (current) {
+        Node* next = current->forward[0];
+        delete current;
+        current = next;
+    }
+    delete head_;
+    head_ = nullptr;
+    size_ = 0;
 }
 
 template <typename Key, typename Value>
 bool SkipList<Key, Value>::insert(const Key& key, const Value& value) {
     // TODO: Locate predecessors at every level. Update duplicate values without
     // increasing size_. Otherwise create a random-height node and splice it in.
-    return false;
+    std::vector<Node*> update(maxLevel_ + 1);
+    Node* current = head_;
+
+    for (std::size_t level = maxLevel_ + 1; level-- > 0;) {
+        while (current->forward[level] &&
+               current->forward[level]->key < key) {
+            current = current->forward[level];
+        }
+        update[level] = current;
+    }
+
+    current = current->forward[0];
+
+    if (current &&
+        !(key < current->key) &&
+        !(current->key < key)) {
+        current->value = value;
+        return false;
+    }
+
+    const std::size_t level = randomLevel();
+    Node* node = new Node(key, value, level);
+
+    for (std::size_t i = 0; i <= level; ++i) {
+        node->forward[i] = update[i]->forward[i];
+        update[i]->forward[i] = node;
+    }
+
+    ++size_;
+    return true;
 }
 
 template <typename Key, typename Value>
 bool SkipList<Key, Value>::erase(const Key& key) {
     // TODO: Locate predecessors, unlink the target from every applicable level,
     // delete it, decrement size_, and return true. Return false if absent.
+    std::vector<Node*> update(maxLevel_ + 1);
+    Node* current = head_;
+
+    for (std::size_t level = maxLevel_ + 1; level-- > 0;) {
+        while (current->forward[level] &&
+               current->forward[level]->key < key) {
+            current = current->forward[level];
+        }
+        update[level] = current;
+    }
+
+    current = current->forward[0];
+
+    if (current &&
+        !(key < current->key) &&
+        !(current->key < key)) {
+        for (std::size_t i = 0; i <= current->forward.size() - 1; ++i) {
+            update[i]->forward[i] = current->forward[i];
+        }
+        delete current;
+        --size_;
+        return true;
+    }
+
     return false;
 }
 
@@ -72,12 +145,42 @@ bool SkipList<Key, Value>::contains(const Key& key) const { return find(key) != 
 template <typename Key, typename Value>
 Value* SkipList<Key, Value>::find(const Key& key) {
     // TODO: Search from the highest level down; return the value pointer or nullptr.
+    Node* current = head_;
+    for (std::size_t level = maxLevel_ + 1; level-- > 0;) {
+        while (current->forward[level] &&
+               current->forward[level]->key < key) {
+            current = current->forward[level];
+        }
+    }
+
+    current = current->forward[0];
+    if (current &&
+        !(key < current->key) &&
+        !(current->key < key)) {
+        return &current->value;
+    }
+
     return nullptr;
 }
 
 template <typename Key, typename Value>
 const Value* SkipList<Key, Value>::find(const Key& key) const {
     // TODO: Const version of find().
+    Node* current = head_;
+    for (std::size_t level = maxLevel_ + 1; level-- > 0;) {
+        while (current->forward[level] &&
+               current->forward[level]->key < key) {
+            current = current->forward[level];
+        }
+    }
+
+    current = current->forward[0];
+    if (current &&
+        !(key < current->key) &&
+        !(current->key < key)) {
+        return &current->value;
+    }
+
     return nullptr;
 }
 
@@ -90,7 +193,13 @@ bool SkipList<Key, Value>::empty() const noexcept { return size_ == 0; }
 template <typename Key, typename Value>
 std::vector<std::pair<Key, Value>> SkipList<Key, Value>::items() const {
     // TODO: Traverse level 0 and return all entries in ascending key order.
-    return {};
+    std::vector<std::pair<Key, Value>> result;
+    Node* current = head_->forward[0];
+    while (current) {
+        result.emplace_back(current->key, current->value);
+        current = current->forward[0];
+    }
+    return result;
 }
 
 template <typename Key, typename Value>
