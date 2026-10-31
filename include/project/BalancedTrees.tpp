@@ -411,24 +411,23 @@ void SplayTree<Key, Value, Compare>::splay(Node* x) {
 template <typename Key, typename Value, typename Compare>
 typename SplayTree<Key, Value, Compare>::Node*
 SplayTree<Key, Value, Compare>::findNode(const Key& key) {
-    // TODO: search for key, remembering the last accessed node,
-    // then splay the found node or last accessed node.
-    Node* last = nullptr;
     Node* current = root_;
+    Node* last = nullptr;
+
     while (current) {
         last = current;
-        if (comp_(key, current->key) < 0) {
+
+        if (comp_(key, current->key)) {
             current = current->left;
-        } else if (comp_(key, current->key) > 0) {
+        } else if (comp_(current->key, key)) {
             current = current->right;
         } else {
             splay(current);
             return current;
         }
     }
-    if (last) {
-        splay(last);
-    }
+
+    if (last) splay(last);
     return nullptr;
 }
 
@@ -444,33 +443,41 @@ const Value* SplayTree<Key, Value, Compare>::find(const Key& key) {
 }
 
 template <typename Key, typename Value, typename Compare>
-void SplayTree<Key, Value, Compare>::insert(const Key& key,
-                                            const Value& value) {
-    // TODO: insert as a BST node and splay the inserted/found node.
+void SplayTree<Key, Value, Compare>::insert(
+    const Key& key, const Value& value
+) {
     Node* current = root_;
     Node* parent = nullptr;
+
     while (current) {
         parent = current;
-        if (comp_(key, current->key) < 0) {
+
+        if (comp_(key, current->key)) {
             current = current->left;
-        } else if (comp_(key, current->key) > 0) {
+        } else if (comp_(current->key, key)) {
             current = current->right;
         } else {
+            current->value = value;
             splay(current);
             return;
         }
     }
-    Node* newNode = new Node(key, value);
-    newNode->parent = parent;
+
+    Node* node = new Node(key, value);
+    node->parent = parent;
+
     if (!parent) {
-        root_ = newNode;
-    } else if (comp_(key, parent->key) < 0) {
-        parent->left = newNode;
+        root_ = node;
+    } else if (comp_(key, parent->key)) {
+        parent->left = node;
     } else {
-        parent->right = newNode;
+        parent->right = node;
     }
-    splay(newNode);
+
+    ++size_;
+    splay(node);
 }
+
 
 template <typename Key, typename Value, typename Compare>
 void SplayTree<Key, Value, Compare>::transplant(Node* u, Node* v) {
@@ -501,29 +508,33 @@ SplayTree<Key, Value, Compare>::subtreeMinimum(Node* n) {
 
 template <typename Key, typename Value, typename Compare>
 bool SplayTree<Key, Value, Compare>::erase(const Key& key) {
-    // TODO: splay the target to the root, remove it, and join the
-    // left/right subtrees correctly.
-    Node* target = find(key);
-    if (!target) {
-        return false;
-    }
-    splay(target);
-    if (!target->left) {
-        transplant(target, target->right);
-    } else if (!target->right) {
-        transplant(target, target->left);
-    } else {
-        Node* successor = subtreeMinimum(target->right);
-        if (successor->parent != target) {
-            transplant(successor, successor->right);
-            successor->right = target->right;
-            successor->right->parent = successor;
-        }
-        transplant(target, successor);
-        successor->left = target->left;
-        successor->left->parent = successor;
-    }
+    Node* target = findNode(key);
+    if (!target) return false;
+
+    Node* left = target->left;
+    Node* right = target->right;
+
+    if (left) left->parent = nullptr;
+    if (right) right->parent = nullptr;
+
     delete target;
+    --size_;
+
+    if (!left) {
+        root_ = right;
+    } else {
+        root_ = left;
+
+        Node* maximum = left;
+        while (maximum->right) {
+            maximum = maximum->right;
+        }
+
+        splay(maximum);
+        root_->right = right;
+        if (right) right->parent = root_;
+    }
+
     return true;
 }
 
